@@ -2,6 +2,7 @@ import { ClassEnum, CompositionTypeEnum, DiscountEnum, PassengerCountEnum, Train
 import z from 'zod';
 
 export type Station = z.infer<typeof StationSchema>;
+export type StationNullId = Omit<Station, 'id'> & { id: string | null; index: number; };
 export const StationSchema = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -62,9 +63,9 @@ export const JourneyOptionsSchema = z.union([
 
 export type JourneyTimetable = z.infer<typeof JourneyTimetableSchema>;
 export const JourneyTimetableSchema = z.object({
-	departureTime: DateTimeSchema,
+	departureTime: z.date(),
 	departureNumber: z.string(),
-	arrivalTime: DateTimeSchema,
+	arrivalTime: z.date(),
 	duration: DateTimeSchema,
 	transfers: z.number(),
 	price: z.number(),
@@ -89,8 +90,8 @@ export const ScheduledStopSchema = z.object({
 	index: z.number(),
 	name: z.string(),
 	stationId: z.string().nullable(),
-	arrivalTime: DateTimeSchema.optional(),
-	departureTime: DateTimeSchema.optional(),
+	arrivalTime: z.date().optional(),
+	departureTime: z.date().optional(),
 	waitingTime: DateTimeSchema.optional(),
 	lateTime: DateTimeSchema.optional(),
 	type: z.nativeEnum(CompositionTypeEnum),
@@ -139,6 +140,8 @@ export const ExtendedTrainDetailsSchema = TrainDetailsSchema.extend({
 
 export type JourneyRouteSchedule = z.infer<typeof JourneyRouteScheduleSchema>;
 export const JourneyRouteScheduleSchema = z.object({
+	departureNumber: z.string(),
+
 	fromStation: z.string(),
 	toStation: z.string(),
 
@@ -149,12 +152,6 @@ export const JourneyRouteScheduleSchema = z.object({
 
 	totalDuration: DateTimeSchema.nullable(),
 	transferDuration: DateTimeSchema.optional(),
-});
-
-export type ExtendedJourneyRoutes = z.infer<typeof ExtendedJourneyRoutesSchema>;
-export const ExtendedJourneyRoutesSchema = z.object({
-	outwardJourneys: z.array(JourneyRouteScheduleSchema),
-	returnJourneys: z.array(JourneyRouteScheduleSchema).optional(),
 });
 
 export type JourneyRouteScheduleSegments = z.infer<typeof JourneyRouteScheduleSegmentsSchema>;
@@ -169,6 +166,18 @@ export const ExtendedJourneyRouteScheduleSchema = JourneyRouteScheduleSchema.omi
 	trains: true,
 }).extend({
 	trains: z.array(ExtendedTrainDetailsSchema),
+});
+
+export type ExtendedJourney = z.infer<typeof ExtendedJourneySchema>;
+export const ExtendedJourneySchema = z.object({
+	details: JourneyTimetableSchema,
+	schedule: ExtendedJourneyRouteScheduleSchema,
+});
+
+export type ExtendedJourneyRoutes = z.infer<typeof ExtendedJourneyRoutesSchema>;
+export const ExtendedJourneyRoutesSchema = z.object({
+	outwardJourneys: z.array(ExtendedJourneySchema),
+	returnJourneys: z.array(ExtendedJourneySchema).optional(),
 });
 
 export type ConvertToSegments<T extends JourneyRouteSchedule> = Omit<T, 'trains'> & {

@@ -1,12 +1,16 @@
-import { JourneyOptions, JourneyRoutes, InternalJourneyData, JourneyRoutesInternalSchema, JourneyTimetable, RollingStockInfo, RollingStockInfoSchema, Station, StationSchema, JourneyRouteSchedule, TrainDetails, JourneyRouteScheduleSchema, TrainInfo, TrainInfoSchema, ExtendedJourneyRouteSchedule, ExtendedJourneyRouteScheduleSchema, ConvertToSegments, TransferDetails, JourneyRouteScheduleSegmentsSchema, ExtendedJourneyRoutes, ExtendedJourneyRoutesSchema } from './parsers';
-import { featuresToEnum, formatMinutesToTime, matchStationName, parseZodError, validateJourney } from './utils';
+import { JourneyOptions, JourneyRoutes, InternalJourneyData, JourneyRoutesInternalSchema, JourneyTimetable, RollingStockInfo, RollingStockInfoSchema, Station, StationSchema, JourneyRouteSchedule, TrainDetails, JourneyRouteScheduleSchema, TrainInfo, TrainInfoSchema, ExtendedJourneyRouteSchedule, ExtendedJourneyRouteScheduleSchema, ConvertToSegments, TransferDetails, JourneyRouteScheduleSegmentsSchema, ExtendedJourneyRoutes, ExtendedJourneyRoutesSchema, ExtendedJourney } from './parsers';
+import { featuresToEnum, formatMinutesToTime, hashObject, matchStationName, parseZodError, timeStringToMinutes, validateJourney } from './utils';
 import { CompositionTypeEnum, TrainStateEnum, TrainStatusEnum, TrainTypeEnum, TripTypeEnum } from './constants';
 import config, { ManagerConfig } from './config';
 import axios, { AxiosError } from 'axios';
+import { FlexibleCache } from './cache';
+import { Element } from 'domhandler';
 import { load } from 'cheerio';
 import { z } from 'zod';
 
 export class HzppManager {
+	private generalCache: FlexibleCache | null;
+
 	private cachedStations: Station[] | null = null;
 
 	private cachedWagons: RollingStockInfo[] | null = null;
@@ -15,11 +19,15 @@ export class HzppManager {
 
 	private managerConfig: ManagerConfig = {
 		minuteDeviationTrainInfo: 15,
+		cacheTimeToLiveSeconds: 10800,
 		authToken: '',
 	};
 
 	constructor (config?: Partial<ManagerConfig>) {
 		if (config) this.managerConfig = { ...this.managerConfig, ...config };
+		this.generalCache = this.managerConfig.cacheTimeToLiveSeconds && this.managerConfig.cacheTimeToLiveSeconds > 0
+			? new FlexibleCache(this.managerConfig.cacheTimeToLiveSeconds)
+			: null;
 	}
 
 	public async getStationById(id: string): Promise<Station | null> {
@@ -110,6 +118,12 @@ export class HzppManager {
 	private async getJourneyInternal(journey: JourneyOptions): Promise<InternalJourneyData> {
 		validateJourney(journey);
 
+		const cacheKey = hashObject(journey);
+		if (this.generalCache && this.generalCache.has(cacheKey)) {
+			const cachedData = this.generalCache.get<InternalJourneyData>(cacheKey);
+			if (cachedData) return cachedData;
+		}
+
 		const url = new URL(config.portalUrl);
 		url.searchParams.set('StartId', journey.startId);
 		url.searchParams.set('DestId', journey.destId);
@@ -148,35 +162,41 @@ export class HzppManager {
 		const stateForClient = $('input[name=StateForClient]').val();
 		if (!csrfToken || !stateForClient) throw new Error('Missing CSRF token or state value.');
 
+		const processElement = (element: Element): JourneyTimetable => {
+			const cells = $(element).find('.cell');
+
+			const departureValue = $(cells[0]).text().trim();
+			const departureTime = createDate(journey.departureDate, departureValue);
+
+			const durationValue = $(cells[3]).text().trim();
+			const duration = timeStringToMinutes(durationValue);
+
+			const arrivalValue = $(cells[2]).text().trim();
+			const calculatedArrivalTime = new Date(departureTime.getTime() + duration * 60000);
+
+			let arrivalTime = createDate(journey.departureDate, arrivalValue);
+			if (calculatedArrivalTime.getDate() !== departureTime.getDate() &&
+				arrivalTime < departureTime) {
+				arrivalTime = new Date(arrivalTime);
+				arrivalTime.setDate(arrivalTime.getDate() + 1);
+			}
+
+			return {
+				departureTime,
+				departureNumber: $(cells[1]).find('a').text().trim(),
+				arrivalTime,
+				duration: $(cells[3]).text().trim(),
+				transfers: parseInt($(cells[4]).text().trim(), 10),
+				price: parseFloat($(cells[5]).text().trim().replace('€', '').replace(',', '.')),
+				hasWarning: $(cells[5]).find('.warningIcon').length > 0,
+			};
+		};
+
 		const outwardJourneys: JourneyTimetable[] = [];
-		$('#outwardJourneyTableContainer .item.row').each((_, element) => {
-			const cells = $(element).find('.cell');
-
-			outwardJourneys.push({
-				departureTime: $(cells[0]).text().trim(),
-				departureNumber: $(cells[1]).find('a').text().trim(),
-				arrivalTime: $(cells[2]).text().trim(),
-				duration: $(cells[3]).text().trim(),
-				transfers: parseInt($(cells[4]).text().trim(), 10),
-				price: parseFloat($(cells[5]).text().trim().replace('€', '').replace(',', '.')),
-				hasWarning: $(cells[5]).find('.warningIcon').length > 0,
-			});
-		});
-
 		const returnJourneys: JourneyTimetable[] = [];
-		$('#returnJourneyTableContainer .item.row').each((_, element) => {
-			const cells = $(element).find('.cell');
 
-			returnJourneys.push({
-				departureTime: $(cells[0]).text().trim(),
-				departureNumber: $(cells[1]).find('a').text().trim(),
-				arrivalTime: $(cells[2]).text().trim(),
-				duration: $(cells[3]).text().trim(),
-				transfers: parseInt($(cells[4]).text().trim(), 10),
-				price: parseFloat($(cells[5]).text().trim().replace('€', '').replace(',', '.')),
-				hasWarning: $(cells[5]).find('.warningIcon').length > 0,
-			});
-		});
+		$('#outwardJourneyTableContainer .item.row').each((_, element) => { outwardJourneys.push(processElement(element)); });
+		$('#returnJourneyTableContainer .item.row').each((_, element) => { returnJourneys.push(processElement(element)); });
 
 		const outputData = {
 			outwardJourneys,
@@ -188,11 +208,26 @@ export class HzppManager {
 
 		const parsed = JourneyRoutesInternalSchema.safeParse(outputData);
 		if (!parsed.success) throw new Error(`Failed to parse journey data: ${parseZodError(parsed.error).join(', ')}.`);
+
+		if (this.generalCache) {
+			this.generalCache.set(cacheKey, parsed.data);
+			this.generalCache.set(cacheKey + '_journey', journey);
+		}
+
 		return parsed.data;
 	}
 
 	public async getJourneyRouteSchedule(journey: JourneyOptions, departureNumber: string, tripType: TripTypeEnum = TripTypeEnum.Outward): Promise<JourneyRouteSchedule> {
 		const journeyData = await this.getJourneyInternal(journey);
+		if (!journeyData) throw new Error('Failed to fetch journey data.');
+
+		const cacheKey = hashObject({ ...journey, departureNumber, tripType });
+		if (this.generalCache && this.generalCache.has(cacheKey)) {
+			const cachedData = this.generalCache.get<JourneyRouteSchedule>(cacheKey);
+			if (cachedData) return cachedData;
+		}
+
+		let currentDate = new Date(journey.departureDate);
 
 		const formData = new URLSearchParams();
 		formData.append('__RequestVerificationToken', journeyData.csrfToken.toString());
@@ -219,19 +254,21 @@ export class HzppManager {
 
 		const allStations = await this.getStations();
 
-		const createDateWithTime = (baseDate: string, timeString: string | undefined, previousDate?: Date | null): Date | null => {
+		const createDateWithTime = (baseDate: string | Date, timeString: string | undefined, previousDate?: Date | null): Date | null => {
 			if (!timeString) return null;
 
 			const [hours, minutes] = timeString.split(':').map(Number);
-			if (hours === undefined || minutes === undefined || isNaN(hours) || isNaN(minutes)) return null;
+			if (hours === undefined || minutes === undefined) return null;
 
 			const date = new Date(baseDate);
 			date.setHours(hours, minutes, 0, 0);
 
 			if (previousDate) {
-				while (date < previousDate) {
-					date.setDate(date.getDate() + 1);
-				}
+				if (date < previousDate) date.setDate(date.getDate() + 1);
+
+				// If previous time was late night (23:xx) and current is early morning (00:xx) but the date difference is more than expected (could be multi-day journey)
+				const hoursDiff = (date.getTime() - previousDate.getTime()) / (1000 * 60 * 60);
+				if (hoursDiff < 0 && hoursDiff > -23) date.setDate(date.getDate() + 1);
 			}
 
 			return date;
@@ -290,18 +327,24 @@ export class HzppManager {
 				};
 
 				if (!isEnd && departureTime) {
-					currentComposition.shouldDepartAt = createDateWithTime(journey.departureDate, departureTime, previousDepartureTime);
+					currentComposition.shouldDepartAt = createDateWithTime(currentDate, departureTime, previousDepartureTime);
 					previousDepartureTime = currentComposition.shouldDepartAt;
+					if (previousDepartureTime) {
+						currentDate = new Date(previousDepartureTime);
+					}
 				}
 
 				if (arrivalTime) {
-					currentComposition.shouldArriveAt = createDateWithTime(journey.departureDate, arrivalTime, previousDepartureTime);
+					currentComposition.shouldArriveAt = createDateWithTime(currentDate, arrivalTime, previousDepartureTime);
 				}
 			}
 
 			if (currentComposition) {
-				const stationArrivalTime = (stationType === CompositionTypeEnum.StartingPoint) ? undefined : arrivalTime;
-				const stationDepartureTime = (stationType === CompositionTypeEnum.Destination) ? undefined : departureTime;
+				const stationArrivalTime = (stationType === CompositionTypeEnum.StartingPoint) ? undefined :
+					arrivalTime ? createDateWithTime(currentDate, arrivalTime, previousDepartureTime) || undefined : undefined;
+
+				const stationDepartureTime = (stationType === CompositionTypeEnum.Destination) ? undefined :
+					departureTime ? createDateWithTime(currentDate, departureTime, previousDepartureTime) || undefined : undefined;
 
 				currentComposition.stations.push({
 					index: currentComposition.stations.length,
@@ -314,8 +357,13 @@ export class HzppManager {
 					lateTime,
 				});
 
+				if (stationDepartureTime) {
+					previousDepartureTime = stationDepartureTime;
+					currentDate = new Date(stationDepartureTime);
+				}
+
 				if (isEnd && arrivalTime) {
-					currentComposition.shouldArriveAt = createDateWithTime(journey.departureDate, arrivalTime, previousDepartureTime);
+					currentComposition.shouldArriveAt = createDateWithTime(currentDate, arrivalTime, previousDepartureTime);
 				}
 			}
 		});
@@ -340,6 +388,7 @@ export class HzppManager {
 		const totalDuration = totalDurationElement.length > 0 ? totalDurationElement.text().trim() : null;
 
 		const transportationData = {
+			departureNumber,
 			trains: compositions,
 			fromStation,
 			toStation,
@@ -361,13 +410,21 @@ export class HzppManager {
 
 		const parsed = JourneyRouteScheduleSchema.safeParse(transportationData);
 		if (!parsed.success) throw new Error(`Failed to parse train composition data: ${parseZodError(parsed.error).join(', ')}.`);
+
+		if (this.generalCache) {
+			this.generalCache.set(cacheKey, parsed.data);
+			this.generalCache.set(cacheKey + '_route_schedule', journey);
+		}
+
 		return parsed.data;
 	}
 
 	public async getJourneyRouteSchedules(journey: JourneyOptions): Promise<ExtendedJourneyRoutes> {
 		const { outwardJourneys, returnJourneys } = await this.getJourneyRoutes(journey);
 
-		const outwardSchedules = await Promise.allSettled(outwardJourneys.map((j) => {
+		const outwardSchedules = await Promise.allSettled(outwardJourneys.filter((j, index, self) => {
+			return self.findIndex((j2) => j2.departureNumber === j.departureNumber) === index;
+		}).map((j) => {
 			return this.getJourneyScheduleWithTrainInfo(journey, j.departureNumber);
 		})).then((results) => {
 			return results.map((result) => {
@@ -376,7 +433,9 @@ export class HzppManager {
 			}).filter((schedule) => schedule !== null) as ExtendedJourneyRouteSchedule[];
 		});
 
-		const returnSchedules = await Promise.allSettled(returnJourneys?.map((j) => {
+		const returnSchedules = await Promise.allSettled(returnJourneys?.filter((j, index, self) => {
+			return self.findIndex((j2) => j2.departureNumber === j.departureNumber) === index;
+		}).map((j) => {
 			return this.getJourneyScheduleWithTrainInfo(journey, j.departureNumber, TripTypeEnum.Return);
 		}) || []).then((results) => {
 			return results.map((result) => {
@@ -386,8 +445,18 @@ export class HzppManager {
 		});
 
 		const schedules = {
-			outwardJourneys: outwardSchedules,
-			returnJourneys: returnSchedules,
+			outwardJourneys: outwardSchedules.map((schedule) => {
+				const details = outwardJourneys.find((j) => j.departureNumber === schedule.departureNumber);
+				if (!details) throw new Error('Failed to find journey details.');
+
+				return { schedule, details } satisfies ExtendedJourney;
+			}),
+			returnJourneys: returnSchedules.map((schedule) => {
+				const details = returnJourneys?.find((j) => j.departureNumber === schedule.departureNumber);
+				if (!details) throw new Error('Failed to find journey details.');
+
+				return { schedule, details } satisfies ExtendedJourney;
+			}),
 		} satisfies ExtendedJourneyRoutes;
 
 		const parsed = ExtendedJourneyRoutesSchema.safeParse(schedules);
@@ -556,4 +625,12 @@ export class HzppManager {
 		if (!parsed.success) throw new Error(`Failed to parse segmented train composition data: ${parseZodError(parsed.error).join(', ')}.`);
 		return parsed.data as ConvertToSegments<T>;
 	}
+}
+
+export function createDate(dateString: string, timeString: string): Date {
+	const date = new Date(dateString);
+	const [hours, minutes] = timeString.split(':').map(Number);
+	if (hours === undefined || minutes === undefined) throw new Error('Failed to parse time string.');
+	date.setHours(hours, minutes, 0, 0);
+	return date;
 }

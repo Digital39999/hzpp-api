@@ -1,6 +1,7 @@
 import { ClassEnum, CompositionTypeEnum, DiscountEnum, featureMap, TrainFeaturesEnum, TrainStateEnum, TrainStatusEnum, TrainTypeEnum, TripTypeEnum } from './constants';
-import { ExtendedTrainDetails, JourneyOptions, ScheduledStop, Station, TrainInfo } from './parsers';
+import { ExtendedJourney, ExtendedTrainDetails, JourneyOptions, ScheduledStop, Station, StationNullId, TrainInfo } from './parsers';
 import { ZodError, ZodIssue } from 'zod';
+import crypto from 'crypto';
 
 export function parseZodError(error: ZodError) {
 	const errors: string[] = [];
@@ -75,6 +76,12 @@ export function formatMinutesToTime(minutes: number) {
 	const hours = Math.floor(minutes / 60);
 	const mins = minutes % 60;
 	return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+}
+
+export function timeStringToMinutes(time: string): number {
+	const [hours, minutes] = time.split(':').map(Number);
+	if (hours === undefined || minutes === undefined) return 0;
+	return hours * 60 + minutes;
 }
 
 export function matchStationName(stations: Station[], name: string): Station | null {
@@ -234,4 +241,105 @@ export function getTripTypeLabel(tripType: TripTypeEnum): string {
 		case TripTypeEnum.Return: return 'Return trip';
 		default: return 'Unknown trip type';
 	}
+}
+
+export function calculateJourneyPercentage(journey: ExtendedJourney, currentTime: Date = new Date()): number {
+	const currentTrain = getCurrentTrain(journey, currentTime);
+
+	if (!currentTrain) {
+		const journeyEndTime = getDelayedTimeFromScheduled(journey.details.arrivalTime, journey).getTime();
+		return currentTime.getTime() >= journeyEndTime ? 100 : 0;
+	}
+
+	if (!currentTrain.trainInfo || !currentTrain.trainInfo.currentStation) return calculateTimeBasedPercentage(journey, currentTime);
+
+	const allStations = getAllJourneyStations(journey);
+	const currentStationId = currentTrain.trainInfo.currentStation.id;
+
+	const currentStationIndex = allStations.findIndex((s) => s.id === currentStationId);
+	if (currentStationIndex === -1) return calculateTimeBasedPercentage(journey, currentTime);
+
+	const stationPercentage = allStations.length > 1 ? (currentStationIndex / (allStations.length - 1)) * 100 : 0;
+
+	const delayedDeparture = getDelayedTimeFromScheduled(currentTrain.shouldDepartAt, journey);
+	const delayedArrival = getDelayedTimeFromScheduled(currentTrain.shouldArriveAt, journey);
+
+	const trainTotalDuration = delayedArrival.getTime() - delayedDeparture.getTime();
+	const timeElapsed = currentTime.getTime() - delayedDeparture.getTime();
+
+	let segmentPercentage = 0;
+	if (trainTotalDuration > 0 && timeElapsed > 0) {
+		segmentPercentage = Math.min(100, (timeElapsed / trainTotalDuration) * 100);
+	}
+
+	return Math.min(100, stationPercentage + (segmentPercentage / allStations.length));
+}
+
+export function calculateTimeBasedPercentage(journey: ExtendedJourney, currentTime: Date = new Date()): number {
+	const journeyStart = getDelayedTimeFromScheduled(journey.details.departureTime, journey).getTime();
+	const journeyEnd = getDelayedTimeFromScheduled(journey.details.arrivalTime, journey).getTime();
+	const now = currentTime.getTime();
+
+	if (now <= journeyStart) return 0;
+	if (now >= journeyEnd) return 100;
+
+	const totalDuration = journeyEnd - journeyStart;
+	const elapsed = now - journeyStart;
+
+	return Math.min(100, (elapsed / totalDuration) * 100);
+}
+
+export function getDelayedTimeFromScheduled(scheduledTime: Date | null | undefined, journey: ExtendedJourney): Date {
+	if (!scheduledTime) return new Date(0);
+
+	let maxDelayMinutes = 0;
+	for (const train of journey.schedule.trains) {
+		if (train.trainInfo?.lateMinutes && train.trainInfo.lateMinutes > maxDelayMinutes) {
+			maxDelayMinutes = train.trainInfo.lateMinutes;
+		}
+	}
+
+	const delayedTime = new Date(scheduledTime);
+	delayedTime.setMinutes(delayedTime.getMinutes() + maxDelayMinutes);
+	return delayedTime;
+}
+
+export function getAllJourneyStations(journey: ExtendedJourney): StationNullId[] {
+	const stations: StationNullId[] = [];
+	let globalIndex = 0;
+
+	for (const train of journey.schedule.trains) {
+		for (const station of train.stations) {
+			if (stations.some((s) => s.id === station.stationId)) continue;
+
+			stations.push({
+				index: globalIndex++,
+				id: station.stationId,
+				name: station.name,
+			});
+		}
+	}
+
+	return stations;
+}
+
+export function getCurrentTrain(journey: ExtendedJourney, currentTime: Date = new Date()): ExtendedTrainDetails | null {
+	for (const train of journey.schedule.trains) {
+		if (!train.trainInfo) continue;
+
+		const shouldDepartAt = train.shouldDepartAt?.getTime() ?? 0;
+		const shouldArriveAt = train.shouldArriveAt?.getTime() ?? 0;
+		const lateDeparture = shouldDepartAt + (train.trainInfo.lateMinutes ?? 0) * 60 * 1000;
+		const lateArrival = shouldArriveAt + (train.trainInfo.lateMinutes ?? 0) * 60 * 1000;
+
+		if (currentTime.getTime() >= lateDeparture && currentTime.getTime() <= lateArrival) return train;
+	}
+
+	return null;
+}
+
+export function hashObject(obj: Record<string, unknown>): string {
+	const hash = crypto.createHash('sha1');
+	hash.update(JSON.stringify(obj));
+	return hash.digest('hex');
 }

@@ -23,4 +23,12 @@ export type ManagerConfig = {
 	 * Token for fetching current train information and train composition.
 	 */
 	authToken: string;
+	/**
+	 * Cache time to live in seconds.
+	 *
+	 * - Default is 3 hours (10800 seconds).
+	 * - Set to `0` to never expire the cache.
+	 * - Set to `-1` to disable caching.
+	 */
+	cacheTimeToLiveSeconds?: number;
 }
