@@ -1,5 +1,5 @@
 export enum DiscountEnum {
-	None = 0,
+	None = 0, // technically, this is not a discount, just empty value
 	RegularSingle = 11, // only for one-way tickets
 	RegularReturn = 12, // only for return tickets
 	ChildAge6To12 = 13,
@@ -69,6 +69,60 @@ export enum TrainFeaturesEnum {
 	ICTrain = 11, // "IC vlakovi" - https://prodaja.hzpp.hr/Content/images/departureDetails/TrainCat3.png
 }
 
+export const discountMap: Record<string, DiscountEnum> = {
+	'Redovna cijena': DiscountEnum.RegularSingle,
+	'Povratna karta': DiscountEnum.RegularReturn,
+	'Dijete 6-12 godina': DiscountEnum.ChildAge6To12,
+	'Novinari': DiscountEnum.Journalists,
+	'Umirovljenici ili starija osoba': DiscountEnum.PensionersAndSeniors,
+	'Mladi do 26 godina': DiscountEnum.YouthAgeTo26,
+	'Studenti': DiscountEnum.Student,
+};
+
+
+export const classMap: Record<string, ClassEnum> = {
+	'1. razred': ClassEnum.First,
+	'2. razred': ClassEnum.Second,
+};
+
+export const trainTypeMap: Record<string, TrainTypeEnum> = {
+	'Izravni vlak': TrainTypeEnum.Direct,
+	'Svi vlakovi': TrainTypeEnum.All,
+};
+
+export const passengerCountMap: Record<string, PassengerCountEnum> = Object.fromEntries(
+	Object.values(PassengerCountEnum).map((value) => {
+		return [`${value} putnik${Number(value) > 1 ? 'a' : ''}`, value];
+	}),
+) as Record<string, PassengerCountEnum>;
+
+export const trainStatusMap: Record<string, TrainStatusEnum> = {
+	'Redovit': TrainStatusEnum.OnTime,
+	'Čeka polazak': TrainStatusEnum.WaitingDeparture,
+	'Kasni': TrainStatusEnum.Delayed,
+	'Nepoznato': TrainStatusEnum.Unknown,
+};
+
+export const trainStateMap: Record<string, TrainStateEnum> = {
+	'Dolazak': TrainStateEnum.Arrival,
+	'Odlazak': TrainStateEnum.Departure,
+	'Završeno': TrainStateEnum.Finished,
+	'Formiran': TrainStateEnum.Formed,
+	'Nepoznato': TrainStateEnum.Unknown,
+};
+
+export const compositionTypeMap: Record<string, CompositionTypeEnum> = {
+	'Polazna točka': CompositionTypeEnum.StartingPoint,
+	'Odredišna točka': CompositionTypeEnum.Destination,
+	'Stajalište': CompositionTypeEnum.Intermediate,
+	'Presjedanje': CompositionTypeEnum.Transfer,
+};
+
+export const tripTypeMap: Record<string, TripTypeEnum> = {
+	'Jednosmjerna karta': TripTypeEnum.Outward,
+	'Povratna karta': TripTypeEnum.Return,
+};
+
 export const featureMap: Record<string, TrainFeaturesEnum> = {
 	'Vagoni prvog razreda': TrainFeaturesEnum.FirstClass,
 	'Vagoni drugog razreda': TrainFeaturesEnum.SecondClass,
@@ -78,5 +132,7 @@ export const featureMap: Record<string, TrainFeaturesEnum> = {
 	'Putnički vlak': TrainFeaturesEnum.PassengerTrain,
 	'Rezervacija moguća': TrainFeaturesEnum.ReservationPossible,
 	'Rezervacija obavezna': TrainFeaturesEnum.ReservationRequired,
+	'Vagon s ležajevima (kušet-vagon)': TrainFeaturesEnum.CouchVagon,
 	'Vagon s posteljama (vagon za spavanje)': TrainFeaturesEnum.BedVagon,
-};
+	'IC vlakovi': TrainFeaturesEnum.ICTrain,
+} as const;
