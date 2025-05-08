@@ -84,6 +84,15 @@ export const discountMapHr: Record<string, DiscountEnum> = {
 	'Studenti': DiscountEnum.Student,
 };
 
+export const discountMapEn: Record<string, DiscountEnum> = {
+	'Regular price': DiscountEnum.RegularSingle,
+	'Return ticket': DiscountEnum.RegularReturn,
+	'Child 6-12 years': DiscountEnum.ChildAge6To12,
+	'Journalists': DiscountEnum.Journalists,
+	'Seniors or older person': DiscountEnum.PensionersAndSeniors,
+	'Youth up to 26 years': DiscountEnum.YouthAgeTo26,
+	'Students': DiscountEnum.Student,
+};
 
 export const classMapHr: Record<string, ClassEnum> = {
 	'1. razred': ClassEnum.First,
