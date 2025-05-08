@@ -48,11 +48,6 @@ export function parseZodError(error: ZodError) {
 	return errors;
 }
 
-export function checkDateFormat(date: string): boolean {
-	const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-	return dateRegex.test(date);
-}
-
 export function calculateDuration(start?: string, end?: string): string | null {
 	if (!start || !end) return '';
 
@@ -107,23 +102,22 @@ export function matchStationName(stations: Station[], name: string): Station | n
 	return null;
 }
 
-export function validateJourney(journey: JourneyOptions): true {
+export function validateJourney(journey: JourneyOptions): Omit<JourneyOptions, 'departureTime'> & { departureTime: Date; } {
+	if (journey.departureTime === 'now') journey.departureTime = new Date();
+
 	// Date format validations
-	if (!checkDateFormat(journey.departureDate)) throw new Error('Invalid date format. Expected YYYY-MM-DD.');
-	else if ('returnTrip' in journey && !checkDateFormat(journey.returnDepartureDate)) throw new Error('Invalid return date format. Expected YYYY-MM-DD.');
+	if (!isValidDateTime(journey.departureTime)) throw new Error('Invalid departure date.');
+	else if ('returnTrip' in journey && journey.returnTrip && !isValidDateTime(journey.returnDepartureTime)) throw new Error('Invalid return date.');
+
 
 	// Required field validations
 	else if (!journey.class) throw new Error('Class is required.');
 	else if (!journey.departureTime) throw new Error('Departure time is required.');
-	else if (!journey.departureDate) throw new Error('Departure date is required.');
 
 	// Date logic validations
-	else if (new Date(journey.departureDate).setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0)) throw new Error('Departure date cannot be in the past.');
-	else if ('returnTrip' in journey && journey.returnTrip && new Date(journey.returnDepartureDate) < new Date()) throw new Error('Return departure date cannot be in the past.');
-	else if ('returnTrip' in journey && journey.returnTrip && new Date(journey.returnDepartureDate) < new Date(journey.departureDate)) throw new Error('Return departure date cannot be before the departure date.');
-
-	// Time format validation
-	else if (journey.departureTime !== 'now' && !journey.departureTime.match(/^\d{2}:\d{2}$/)) throw new Error('Invalid departure time format. Expected HH:mm or "now".');
+	else if (new Date(journey.departureTime).setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0)) throw new Error('Departure date cannot be in the past.');
+	else if ('returnTrip' in journey && journey.returnTrip && journey.returnDepartureTime < new Date()) throw new Error('Return departure date cannot be in the past.');
+	else if ('returnTrip' in journey && journey.returnTrip && journey.returnDepartureTime < journey.departureTime) throw new Error('Return departure date cannot be before the departure date.');
 
 	// Class validation
 	else if (journey.class !== 1 && journey.class !== 2) throw new Error('Invalid class. Expected 1 or 2.');
@@ -143,7 +137,10 @@ export function validateJourney(journey: JourneyOptions): true {
 	else if (journey.bicycle && typeof journey.bicycle !== 'boolean') throw new Error('Bicycle option must be a boolean value.');
 	else if ('returnTrip' in journey && journey.returnTrip && journey.returnBicycle && typeof journey.returnBicycle !== 'boolean') throw new Error('Return bicycle option must be a boolean value.');
 
-	return true;
+	return {
+		...journey,
+		departureTime: new Date(journey.departureTime),
+	};
 }
 
 export function featuresToEnum(features: string[]): TrainFeaturesEnum[] {
@@ -342,4 +339,17 @@ export function hashObject(obj: Record<string, unknown>): string {
 	const hash = crypto.createHash('sha1');
 	hash.update(JSON.stringify(obj));
 	return hash.digest('hex');
+}
+
+export function dateToDateTime(date: Date): { date: string; time: string } {
+	const formattedDate = date.toISOString().split('T')[0];
+	const formattedTime = date.toTimeString().split(' ')[0]?.slice(0, 5);
+	if (!formattedDate || !formattedTime) throw new Error('Invalid date or time format.');
+
+	return { date: formattedDate, time: formattedTime };
+}
+
+export function isValidDateTime(date: Date): boolean {
+	const parsedDate = new Date(date);
+	return !isNaN(parsedDate.getTime());
 }

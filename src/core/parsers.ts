@@ -34,13 +34,11 @@ export const JourneyOptionsOneWaySchema = z.object({
 	class: z.nativeEnum(ClassEnum),
 	trainType: z.nativeEnum(TrainTypeEnum),
 
-	departureTime: z.union([DateTimeSchema, z.literal('now')]).refine((value) => {
+	departureTime: z.union([z.date(), z.literal('now')]).refine((value) => {
 		if (value === 'now') return true;
-		const [hours, minutes] = value.split(':').map(Number);
-		if (!hours || !minutes || isNaN(hours) || isNaN(minutes)) return false;
-		return hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60;
-	}, 'Invalid time format. Expected HH:mm or "now".'),
-	departureDate: DateStringSchema,
+		else if (value instanceof Date) return !isNaN(value.getTime());
+		else return false;
+	}, 'Invalid time format. Expected date or "now".'),
 	passengerCount: PassengerCountSchema.or(z.tuple([PassengerCountSchema, PassengerCountSchema])),
 
 	bicycle: z.boolean().optional(),
@@ -49,7 +47,7 @@ export const JourneyOptionsOneWaySchema = z.object({
 export type ReturnJourneyInput = z.infer<typeof JourneyOptionsReturnSchema>;
 export const JourneyOptionsReturnSchema = JourneyOptionsOneWaySchema.extend({
 	returnFromId: z.string(),
-	returnDepartureDate: DateStringSchema,
+	returnDepartureTime: z.date(),
 
 	returnTrip: z.literal(true),
 	returnBicycle: z.boolean().optional(),

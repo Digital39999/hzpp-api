@@ -1,5 +1,5 @@
 import { JourneyOptions, JourneyRoutes, InternalJourneyData, JourneyRoutesInternalSchema, JourneyTimetable, RollingStockInfo, RollingStockInfoSchema, Station, StationSchema, JourneyRouteSchedule, TrainDetails, JourneyRouteScheduleSchema, TrainInfo, TrainInfoSchema, ExtendedJourneyRouteSchedule, ExtendedJourneyRouteScheduleSchema, ConvertToSegments, TransferDetails, JourneyRouteScheduleSegmentsSchema, ExtendedJourneyRoutes, ExtendedJourneyRoutesSchema, ExtendedJourney } from './parsers';
-import { featuresToEnum, formatMinutesToTime, hashObject, matchStationName, parseZodError, timeStringToMinutes, validateJourney } from './utils';
+import { dateToDateTime, featuresToEnum, formatMinutesToTime, hashObject, matchStationName, parseZodError, timeStringToMinutes, validateJourney } from './utils';
 import { CompositionTypeEnum, TrainStateEnum, TrainStatusEnum, TrainTypeEnum, TripTypeEnum } from './constants';
 import config, { ManagerConfig } from './config';
 import axios, { AxiosError } from 'axios';
@@ -116,7 +116,8 @@ export class HzppManager {
 	}
 
 	private async getJourneyInternal(journey: JourneyOptions): Promise<InternalJourneyData> {
-		validateJourney(journey);
+		const validatedJourney = validateJourney(journey);
+		const parsedDate = dateToDateTime(validatedJourney.departureTime);
 
 		const cacheKey = hashObject(journey);
 		if (this.generalCache && this.generalCache.has(cacheKey)) {
@@ -128,7 +129,7 @@ export class HzppManager {
 		url.searchParams.set('StartId', journey.startId);
 		url.searchParams.set('DestId', journey.destId);
 		url.searchParams.set('Class', journey.class.toString());
-		url.searchParams.set('DepartureDate', journey.departureDate);
+		url.searchParams.set('DepartureDate', parsedDate.date);
 
 		if (journey.viaId) url.searchParams.set('ViaId', journey.viaId);
 		if (journey.trainType !== undefined) url.searchParams.set('DirectTrains', journey.trainType === TrainTypeEnum.Direct ? 'True' : 'False');
@@ -146,9 +147,11 @@ export class HzppManager {
 
 		if (journey.bicycle) url.searchParams.set('Bicycle', 'True');
 		if ('returnTrip' in journey && journey.returnTrip) {
+			const parsedReturnDate = dateToDateTime(journey.returnDepartureTime);
+
 			url.searchParams.set('ReturnTrip', 'True');
 			url.searchParams.set('ReturnFromId', journey.returnFromId);
-			url.searchParams.set('ReturnDepartureDate', journey.returnDepartureDate);
+			url.searchParams.set('ReturnDepartureDate', parsedReturnDate.date);
 			if (journey.returnBicycle) url.searchParams.set('ReturnBicycle', 'True');
 		}
 
@@ -166,7 +169,7 @@ export class HzppManager {
 			const cells = $(element).find('.cell');
 
 			const departureValue = $(cells[0]).text().trim();
-			const departureTime = createDate(journey.departureDate, departureValue);
+			const departureTime = createDate(parsedDate.date, departureValue);
 
 			const durationValue = $(cells[3]).text().trim();
 			const duration = timeStringToMinutes(durationValue);
@@ -174,7 +177,7 @@ export class HzppManager {
 			const arrivalValue = $(cells[2]).text().trim();
 			const calculatedArrivalTime = new Date(departureTime.getTime() + duration * 60000);
 
-			let arrivalTime = createDate(journey.departureDate, arrivalValue);
+			let arrivalTime = createDate(parsedDate.date, arrivalValue);
 			if (calculatedArrivalTime.getDate() !== departureTime.getDate() &&
 				arrivalTime < departureTime) {
 				arrivalTime = new Date(arrivalTime);
@@ -221,13 +224,16 @@ export class HzppManager {
 		const journeyData = await this.getJourneyInternal(journey);
 		if (!journeyData) throw new Error('Failed to fetch journey data.');
 
+		const validatedJourney = validateJourney(journey);
+		const parsedDate = dateToDateTime(validatedJourney.departureTime);
+
 		const cacheKey = hashObject({ ...journey, departureNumber, tripType });
 		if (this.generalCache && this.generalCache.has(cacheKey)) {
 			const cachedData = this.generalCache.get<JourneyRouteSchedule>(cacheKey);
 			if (cachedData) return cachedData;
 		}
 
-		let currentDate = new Date(journey.departureDate);
+		let currentDate = new Date(parsedDate.date);
 
 		const formData = new URLSearchParams();
 		formData.append('__RequestVerificationToken', journeyData.csrfToken.toString());
@@ -381,8 +387,8 @@ export class HzppManager {
 		const toStation = lastStation.stationId ? matchStationName(allStations, lastStation.name)?.name : lastStation.name;
 		if (!fromStation || !toStation) throw new Error('Failed to parse train composition data.');
 
-		const shouldStartAt = firstTrain?.shouldDepartAt ? new Date(firstTrain.shouldDepartAt) : new Date(journey.departureDate);
-		const shouldEndAt = lastTrain?.shouldArriveAt ? new Date(lastTrain.shouldArriveAt) : new Date(journey.departureDate);
+		const shouldStartAt = firstTrain?.shouldDepartAt || validatedJourney.departureTime;
+		const shouldEndAt = lastTrain?.shouldArriveAt || validatedJourney.departureTime;
 
 		const totalDurationElement = $('.disclaimer-content.col-1-2 span').first();
 		const totalDuration = totalDurationElement.length > 0 ? totalDurationElement.text().trim() : null;
@@ -522,13 +528,7 @@ export class HzppManager {
 	public async getJourneyScheduleWithTrainInfo(journey: JourneyOptions, departureNumber: string, tripType: TripTypeEnum = TripTypeEnum.Outward): Promise<ExtendedJourneyRouteSchedule> {
 		if (!this.managerConfig.authToken) throw new Error('Auth token is required to fetch train info.');
 		const schedule = await this.getJourneyRouteSchedule(journey, departureNumber, tripType);
-
-		const targetDate = new Date(journey.departureDate);
 		const now = new Date();
-
-		const [hours, minutes] = journey.departureTime === 'now' ? [now.getHours(), now.getMinutes()] : journey.departureTime.split(':').map(Number);
-		if (hours === undefined || minutes === undefined) throw new Error('Failed to parse train composition data.');
-		targetDate.setHours(hours, minutes, 0, 0);
 
 		const trainInfoPromises = schedule.trains.filter((train, index, self) => {
 			return self.findIndex((t) => t.trainNumber === train.trainNumber) === index;
