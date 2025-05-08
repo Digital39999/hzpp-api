@@ -1,3 +1,8 @@
+export enum LanguageEnum {
+	English = 'en',
+	Croatian = 'hr',
+}
+
 export enum DiscountEnum {
 	None = 0, // technically, this is not a discount, just empty value
 	RegularSingle = 11, // only for one-way tickets

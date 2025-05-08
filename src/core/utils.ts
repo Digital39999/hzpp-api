@@ -1,4 +1,4 @@
-import { ClassEnum, CompositionTypeEnum, DiscountEnum, featureMap, TrainFeaturesEnum, TrainStateEnum, TrainStatusEnum, TrainTypeEnum, TripTypeEnum } from './constants';
+import { ClassEnum, CompositionTypeEnum, DiscountEnum, featureMapEn, featureMapHr, LanguageEnum, TrainFeaturesEnum, TrainStateEnum, TrainStatusEnum, TrainTypeEnum, TripTypeEnum } from './constants';
 import { ExtendedJourney, ExtendedTrainDetails, JourneyOptions, ScheduledStop, Station, StationNullId, TrainInfo } from './parsers';
 import { ZodError, ZodIssue } from 'zod';
 import crypto from 'crypto';
@@ -143,10 +143,10 @@ export function validateJourney(journey: JourneyOptions): Omit<JourneyOptions, '
 	};
 }
 
-export function featuresToEnum(features: string[]): TrainFeaturesEnum[] {
+export function featuresToEnum(features: string[], type: LanguageEnum = LanguageEnum.English): TrainFeaturesEnum[] {
 	const lowerCaseFeatures = features.map((feature) => feature.toLowerCase());
 
-	const enumValues = Object.entries(featureMap).reduce((acc, [key, value]) => {
+	const enumValues = Object.entries(type === LanguageEnum.Croatian ? featureMapHr : featureMapEn).reduce((acc, [key, value]) => {
 		if (lowerCaseFeatures.includes(key.toLowerCase())) acc.push(value);
 		return acc;
 	}, [] as TrainFeaturesEnum[]);
@@ -154,8 +154,8 @@ export function featuresToEnum(features: string[]): TrainFeaturesEnum[] {
 	return enumValues;
 }
 
-export function enumToFeatures(features: TrainFeaturesEnum[]): string[] {
-	const featureMapReversed = Object.entries(featureMap).reduce((acc, [key, value]) => {
+export function enumToFeatures(features: TrainFeaturesEnum[], type: LanguageEnum = LanguageEnum.English): string[] {
+	const featureMapReversed = Object.entries(type === LanguageEnum.Croatian ? featureMapHr : featureMapEn).reduce((acc, [key, value]) => {
 		acc[value] = key;
 		return acc;
 	}, {} as Record<TrainFeaturesEnum, string>);
