@@ -105,12 +105,12 @@ export const classMapEn: Record<string, ClassEnum> = {
 };
 
 export const trainTypeMapHr: Record<string, TrainTypeEnum> = {
-	'Izravni vlak': TrainTypeEnum.Direct,
+	'Izravni vlakovi': TrainTypeEnum.Direct,
 	'Svi vlakovi': TrainTypeEnum.All,
 };
 
 export const trainTypeMapEn: Record<string, TrainTypeEnum> = {
-	'Direct train': TrainTypeEnum.Direct,
+	'Direct trains': TrainTypeEnum.Direct,
 	'All trains': TrainTypeEnum.All,
 };
 

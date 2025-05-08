@@ -49,7 +49,7 @@ export const JourneyOptionsReturnSchema = JourneyOptionsOneWaySchema.extend({
 	returnFromId: z.string(),
 	returnDepartureTime: z.date(),
 
-	returnTrip: z.literal(true),
+	returnTrip: z.boolean(),
 	returnBicycle: z.boolean().optional(),
 });
 
