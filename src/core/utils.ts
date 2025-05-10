@@ -139,7 +139,7 @@ export function validateJourney(journey: JourneyOptions): ValidatedJourneyOption
 	return {
 		...journey,
 		departureTime: new Date(journey.departureTime),
-	};
+	} as ValidatedJourneyOptions;
 }
 
 export function featuresToEnum(features: string[], type: LanguageEnum = LanguageEnum.English): TrainFeaturesEnum[] {

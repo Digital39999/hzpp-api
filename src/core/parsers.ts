@@ -187,7 +187,8 @@ export const ValidatedJourneyOptionsSchema = z.union([
 	JourneyOptionsOneWaySchema.omit({ departureTime: true }).extend({
 		departureTime: z.date(),
 	}),
-	JourneyOptionsReturnSchema.omit({ returnDepartureTime: true }).extend({
+	JourneyOptionsReturnSchema.omit({ departureTime: true, returnDepartureTime: true }).extend({
+		departureTime: z.date(),
 		returnDepartureTime: z.date(),
 	}),
 ]);
