@@ -1,6 +1,6 @@
 import { JourneyOptions, JourneyRoutes, InternalJourneyData, JourneyRoutesInternalSchema, JourneyTimetable, RollingStockInfo, RollingStockInfoSchema, Station, StationSchema, JourneyRouteSchedule, TrainDetails, JourneyRouteScheduleSchema, TrainInfo, TrainInfoSchema, ExtendedJourneyRouteSchedule, ExtendedJourneyRouteScheduleSchema, ConvertToSegments, TransferDetails, JourneyRouteScheduleSegmentsSchema, ExtendedJourneyRoutes, ExtendedJourneyRoutesSchema, ExtendedJourney, ExtendedJourneyRoutesWithSegments } from './parsers';
 import { dateToDateTime, featuresToEnum, formatMinutesToTime, hashObject, matchStationName, parseZodError, timeStringToMinutes, validateJourney } from './utils';
-import { CompositionTypeEnum, TrainStateEnum, TrainStatusEnum, TrainTypeEnum, TripTypeEnum } from './constants';
+import { CompositionTypeEnum, DiscountEnum, TrainStateEnum, TrainStatusEnum, TrainTypeEnum, TripTypeEnum } from './constants';
 import config, { ManagerConfig } from './config';
 import axios, { AxiosError } from 'axios';
 import { FlexibleCache } from './cache';
@@ -133,16 +133,23 @@ export class HzppManager {
 
 		if (journey.viaId) url.searchParams.set('ViaId', journey.viaId);
 		if (journey.trainType !== undefined) url.searchParams.set('DirectTrains', journey.trainType === TrainTypeEnum.Direct ? 'True' : 'False');
-		if (journey.passengerCount) {
+		if (journey.passengerCount.length) {
 			if (Array.isArray(journey.passengerCount)) {
-				url.searchParams.set('Passenger1Count', journey.passengerCount[0].count.toString());
-				url.searchParams.set('Passenger2Count', journey.passengerCount[1].count.toString());
-				if (journey.passengerCount[0].benefitId) url.searchParams.set('Benefit1Id', journey.passengerCount[0].benefitId.toString());
-				if (journey.passengerCount[1].benefitId) url.searchParams.set('Benefit2Id', journey.passengerCount[1].benefitId.toString());
-			} else {
-				url.searchParams.set('Passenger1Count', journey.passengerCount.count.toString());
-				if (journey.passengerCount.benefitId) url.searchParams.set('Benefit1Id', journey.passengerCount.benefitId.toString());
+				const firstPassenger = journey.passengerCount[0];
+				if (firstPassenger) {
+					url.searchParams.set('Passenger1Count', firstPassenger.count.toString());
+					if (firstPassenger.benefitId) url.searchParams.set('Benefit1Id', firstPassenger.benefitId.toString());
+				}
+
+				const secondPassenger = journey.passengerCount[1];
+				if (secondPassenger) {
+					url.searchParams.set('Passenger2Count', secondPassenger.count.toString());
+					if (secondPassenger.benefitId) url.searchParams.set('Benefit2Id', secondPassenger.benefitId.toString());
+				}
 			}
+		} else {
+			url.searchParams.set('Passenger1Count', '1');
+			url.searchParams.set('Benefit1Id', ('returnTrip' in journey && journey.returnTrip ? DiscountEnum.RegularReturn : DiscountEnum.RegularSingle).toString());
 		}
 
 		if (journey.bicycle) url.searchParams.set('Bicycle', 'True');

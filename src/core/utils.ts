@@ -128,9 +128,10 @@ export function validateJourney(journey: JourneyOptions): ValidatedJourneyOption
 	else if (journey.trainType !== undefined && journey.trainType !== TrainTypeEnum.Direct && journey.trainType !== TrainTypeEnum.All) throw new Error('Invalid train type. Expected 0 or 1.');
 
 	// Passenger validations
-	else if (journey.passengerCount && typeof journey.passengerCount === 'object' && !Array.isArray(journey.passengerCount) && !journey.passengerCount.count) throw new Error('Passenger count is required.');
 	else if (journey.passengerCount && Array.isArray(journey.passengerCount) && journey.passengerCount.length > 2) throw new Error('Maximum of 2 passenger types are allowed.');
 	else if (journey.passengerCount && Array.isArray(journey.passengerCount) && journey.passengerCount.some((passenger) => passenger.count > 6)) throw new Error('Maximum of 6 passengers are allowed.');
+	else if (journey.passengerCount && Array.isArray(journey.passengerCount) && journey.passengerCount.some((passenger) => passenger.benefitId === DiscountEnum.None)) throw new Error('None discount is not allowed, either use RegularSingle or RegularReturn.');
+	else if ('returnTrip' in journey && journey.returnTrip && journey.passengerCount && Array.isArray(journey.passengerCount) && journey.passengerCount.some((passenger) => passenger.benefitId === DiscountEnum.RegularSingle)) throw new Error('Return trip cannot have RegularSingle discount.');
 
 	// Bicycle validation
 	else if (journey.bicycle && typeof journey.bicycle !== 'boolean') throw new Error('Bicycle option must be a boolean value.');

@@ -39,7 +39,7 @@ export const JourneyOptionsOneWaySchema = z.object({
 		else if (value instanceof Date) return !isNaN(value.getTime());
 		else return false;
 	}, 'Invalid time format. Expected date or "now".'),
-	passengerCount: PassengerCountSchema.or(z.tuple([PassengerCountSchema, PassengerCountSchema])),
+	passengerCount: z.tuple([PassengerCountSchema]).or(z.tuple([PassengerCountSchema, PassengerCountSchema])),
 
 	bicycle: z.boolean().optional(),
 });
