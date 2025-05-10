@@ -182,6 +182,12 @@ export type ConvertToSegments<T extends JourneyRouteSchedule> = Omit<T, 'trains'
 	segments: (TrainDetails | TransferDetails)[];
 };
 
-export type ValidatedJourneyOptions = Omit<JourneyOptions, 'departureTime'> & {
-	departureTime: Date;
-};
+export type ValidatedJourneyOptions = z.infer<typeof ValidatedJourneyOptionsSchema>;
+export const ValidatedJourneyOptionsSchema = z.union([
+	JourneyOptionsOneWaySchema.omit({ departureTime: true }).extend({
+		departureTime: z.date(),
+	}),
+	JourneyOptionsReturnSchema.omit({ returnDepartureTime: true }).extend({
+		returnDepartureTime: z.date(),
+	}),
+]);
