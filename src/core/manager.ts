@@ -1,4 +1,4 @@
-import { JourneyOptions, JourneyRoutes, InternalJourneyData, JourneyRoutesInternalSchema, JourneyTimetable, RollingStockInfo, RollingStockInfoSchema, Station, StationSchema, JourneyRouteSchedule, TrainDetails, JourneyRouteScheduleSchema, TrainInfo, TrainInfoSchema, ExtendedJourneyRouteSchedule, ExtendedJourneyRouteScheduleSchema, ConvertToSegments, TransferDetails, JourneyRouteScheduleSegmentsSchema, ExtendedJourneyRoutes, ExtendedJourneyRoutesSchema, ExtendedJourney, ExtendedJourneyRoutesWithSegments } from './parsers';
+import { JourneyOptions, JourneyRoutes, InternalJourneyData, JourneyRoutesInternalSchema, JourneyTimetable, RollingStockInfo, RollingStockInfoSchema, Station, StationSchema, JourneyRouteSchedule, TrainDetails, JourneyRouteScheduleSchema, TrainInfo, TrainInfoSchema, ExtendedJourneyRouteSchedule, ExtendedJourneyRouteScheduleSchema, ConvertToSegments, TransferDetails, JourneyRouteScheduleSegmentsSchema, ExtendedJourneyRoutes, ExtendedJourneyRoutesSchema, ExtendedJourney, ExtendedJourneyRoutesWithSegments, BaseJourneyInfo } from './parsers';
 import { dateToDateTime, featuresToEnum, formatMinutesToTime, hashObject, matchStationName, parseZodError, timeStringToMinutes, validateJourney } from './utils';
 import { CompositionTypeEnum, DiscountEnum, TrainStateEnum, TrainStatusEnum, TrainTypeEnum, TripTypeEnum } from './constants';
 import config, { ManagerConfig } from './config';
@@ -644,6 +644,19 @@ export class HzppManager {
 				return { ...journey, schedule };
 			}),
 		};
+	}
+
+	public getBaseInformation<T extends ExtendedJourney>(data: T[]): BaseJourneyInfo | null {
+		if (data.length === 0) return null;
+
+		const fromStation = data.find((j) => j.schedule.fromStation)?.schedule.fromStation;
+		const toStation = data.find((j) => j.schedule.toStation)?.schedule.toStation;
+		if (!fromStation || !toStation) return null;
+
+		return {
+			fromStation,
+			toStation,
+		} satisfies BaseJourneyInfo;
 	}
 }
 

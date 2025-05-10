@@ -202,3 +202,5 @@ export type ExtendedJourneyRoutesWithSegments = {
 		details: JourneyTimetable;
 	}[];
 };
+
+export type BaseJourneyInfo = Pick<JourneyRouteSchedule, 'fromStation' | 'toStation'>;
