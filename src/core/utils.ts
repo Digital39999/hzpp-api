@@ -1,5 +1,5 @@
 import { ClassEnum, CompositionTypeEnum, DiscountEnum, featureMapEn, featureMapHr, LanguageEnum, TrainFeaturesEnum, TrainStateEnum, TrainStatusEnum, TrainTypeEnum, TripTypeEnum } from './constants';
-import { ExtendedJourney, ExtendedTrainDetails, JourneyOptions, ScheduledStop, Station, StationNullId, TrainInfo } from './parsers';
+import { ExtendedJourney, ExtendedTrainDetails, JourneyOptions, ScheduledStop, Station, StationNullId, TrainInfo, ValidatedJourneyOptions } from './parsers';
 import { ZodError, ZodIssue } from 'zod';
 import crypto from 'crypto';
 
@@ -102,13 +102,12 @@ export function matchStationName(stations: Station[], name: string): Station | n
 	return null;
 }
 
-export function validateJourney(journey: JourneyOptions): Omit<JourneyOptions, 'departureTime'> & { departureTime: Date; } {
+export function validateJourney(journey: JourneyOptions): ValidatedJourneyOptions {
 	if (journey.departureTime === 'now') journey.departureTime = new Date();
 
 	// Date format validations
 	if (!isValidDateTime(journey.departureTime)) throw new Error('Invalid departure date.');
 	else if ('returnTrip' in journey && journey.returnTrip && !isValidDateTime(journey.returnDepartureTime)) throw new Error('Invalid return date.');
-
 
 	// Required field validations
 	else if (!journey.class) throw new Error('Class is required.');

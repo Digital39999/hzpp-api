@@ -181,3 +181,7 @@ export const ExtendedJourneyRoutesSchema = z.object({
 export type ConvertToSegments<T extends JourneyRouteSchedule> = Omit<T, 'trains'> & {
 	segments: (TrainDetails | TransferDetails)[];
 };
+
+export type ValidatedJourneyOptions = Omit<JourneyOptions, 'departureTime'> & {
+	departureTime: Date;
+};
