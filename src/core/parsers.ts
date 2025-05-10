@@ -196,8 +196,9 @@ export type ConvertToSegments<T extends JourneyRouteSchedule> = Omit<T, 'trains'
 	segments: (TrainDetails | TransferDetails)[];
 };
 
-export type ExtendedJourneyRoutesWithSegments<T extends ExtendedJourneyRoutes> = {
-	[K in keyof T]: T[K] extends Array<infer Route>
-	? Array<ConvertToSegments<Route & JourneyRouteSchedule>>
-	: never;
+export type ExtendedJourneyRoutesWithSegments = {
+	[K in keyof ExtendedJourneyRoutes]: {
+		schedule: ConvertToSegments<ExtendedJourneyRouteSchedule>;
+		details: JourneyTimetable;
+	}[];
 };

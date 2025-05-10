@@ -633,17 +633,17 @@ export class HzppManager {
 		return parsed.data as ConvertToSegments<T>;
 	}
 
-	public convertMultipleJourneySchedulesToSegments<T extends ExtendedJourneyRoutes>(data: T): ExtendedJourneyRoutesWithSegments<T> {
+	public convertMultipleJourneySchedulesToSegments(data: ExtendedJourneyRoutes): ExtendedJourneyRoutesWithSegments {
 		return {
 			outwardJourneys: data.outwardJourneys.map((journey) => {
 				const schedule = this.convertJourneyScheduleToSegments(journey.schedule);
-				return { ...journey, ...schedule };
+				return { ...journey, schedule };
 			}),
 			returnJourneys: data.returnJourneys?.map((journey) => {
 				const schedule = this.convertJourneyScheduleToSegments(journey.schedule);
-				return { ...journey, ...schedule };
+				return { ...journey, schedule };
 			}),
-		} as ExtendedJourneyRoutesWithSegments<T>;
+		};
 	}
 }
 
