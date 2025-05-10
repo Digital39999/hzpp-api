@@ -16,8 +16,11 @@ export const RollingStockInfoSchema = z.object({
 
 export type DateString = z.infer<typeof DateStringSchema>;
 export type DateTimeString = z.infer<typeof DateTimeSchema>;
-export const DateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format. Expected YYYY-MM-DD');
 export const DateTimeSchema = z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format. Expected HH:mm');
+export const DateStringSchema = z.preprocess((arg) => {
+	const date = new Date(arg as string | Date);
+	return isNaN(date.getTime()) ? undefined : date;
+}, z.date());
 
 export type PassengerCount = z.infer<typeof PassengerCountSchema>;
 export const PassengerCountSchema = z.object({
@@ -34,7 +37,7 @@ export const JourneyOptionsOneWaySchema = z.object({
 	class: z.nativeEnum(ClassEnum),
 	trainType: z.nativeEnum(TrainTypeEnum),
 
-	departureTime: z.union([z.date(), z.literal('now')]).refine((value) => {
+	departureTime: z.union([DateStringSchema, z.literal('now')]).refine((value) => {
 		if (value === 'now') return true;
 		else if (value instanceof Date) return !isNaN(value.getTime());
 		else return false;
@@ -47,7 +50,7 @@ export const JourneyOptionsOneWaySchema = z.object({
 export type ReturnJourneyInput = z.infer<typeof JourneyOptionsReturnSchema>;
 export const JourneyOptionsReturnSchema = JourneyOptionsOneWaySchema.extend({
 	returnFromId: z.string(),
-	returnDepartureTime: z.date(),
+	returnDepartureTime: DateStringSchema,
 
 	returnTrip: z.boolean(),
 	returnBicycle: z.boolean().optional(),
@@ -61,9 +64,9 @@ export const JourneyOptionsSchema = z.union([
 
 export type JourneyTimetable = z.infer<typeof JourneyTimetableSchema>;
 export const JourneyTimetableSchema = z.object({
-	departureTime: z.date(),
+	departureTime: DateStringSchema,
 	departureNumber: z.string(),
-	arrivalTime: z.date(),
+	arrivalTime: DateStringSchema,
 	duration: DateTimeSchema,
 	transfers: z.number(),
 	price: z.number(),
@@ -88,8 +91,8 @@ export const ScheduledStopSchema = z.object({
 	index: z.number(),
 	name: z.string(),
 	stationId: z.string().nullable(),
-	arrivalTime: z.date().optional(),
-	departureTime: z.date().optional(),
+	arrivalTime: DateStringSchema.optional(),
+	departureTime: DateStringSchema.optional(),
 	waitingTime: DateTimeSchema.optional(),
 	lateTime: DateTimeSchema.optional(),
 	type: z.nativeEnum(CompositionTypeEnum),
@@ -102,7 +105,7 @@ export const TrainInfoSchema = z.object({
 
 	isReplacementBus: z.boolean().optional().default(false),
 
-	atTime: z.date(), // departure time/formed time/finished time
+	atTime: DateStringSchema, // departure time/formed time/finished time
 	lateMinutes: z.number().optional(),
 
 	state: z.nativeEnum(TrainStateEnum),
@@ -114,8 +117,8 @@ export const TrainDetailsSchema = z.object({
 	index: z.number(),
 	trainNumber: z.string(),
 
-	shouldDepartAt: z.date().nullable(),
-	shouldArriveAt: z.date().nullable(),
+	shouldDepartAt: DateStringSchema.nullable(),
+	shouldArriveAt: DateStringSchema.nullable(),
 
 	features: z.array(z.nativeEnum(TrainFeaturesEnum)),
 	stations: z.array(ScheduledStopSchema),
@@ -143,8 +146,8 @@ export const JourneyRouteScheduleSchema = z.object({
 	fromStation: z.string(),
 	toStation: z.string(),
 
-	shouldStartAt: z.date(),
-	shouldEndAt: z.date(),
+	shouldStartAt: DateStringSchema,
+	shouldEndAt: DateStringSchema,
 
 	trains: z.array(TrainDetailsSchema),
 
@@ -181,11 +184,11 @@ export const ExtendedJourneyRoutesSchema = z.object({
 export type ValidatedJourneyOptions = z.infer<typeof ValidatedJourneyOptionsSchema>;
 export const ValidatedJourneyOptionsSchema = z.union([
 	JourneyOptionsOneWaySchema.omit({ departureTime: true }).extend({
-		departureTime: z.date(),
+		departureTime: DateStringSchema,
 	}),
 	JourneyOptionsReturnSchema.omit({ departureTime: true, returnDepartureTime: true }).extend({
-		departureTime: z.date(),
-		returnDepartureTime: z.date(),
+		departureTime: DateStringSchema,
+		returnDepartureTime: DateStringSchema,
 	}),
 ]);
 
