@@ -125,7 +125,7 @@ export type TransferDetails = z.infer<typeof TransferDetailsSchema>;
 export const TransferDetailsSchema = z.object({
 	index: z.number(),
 	transferToTrain: z.string(),
-	transferDuration: z.string().optional(),
+	transferDuration: z.string().nullable(),
 
 	transferStation: z.string(),
 	transferStationId: z.string().nullable(),
@@ -149,7 +149,7 @@ export const JourneyRouteScheduleSchema = z.object({
 	trains: z.array(TrainDetailsSchema),
 
 	totalDuration: DateTimeSchema.nullable(),
-	transferDuration: DateTimeSchema.optional(),
+	transferDuration: DateTimeSchema.nullable(),
 });
 
 export type JourneyRouteScheduleSegments = z.infer<typeof JourneyRouteScheduleSegmentsSchema>;
@@ -178,10 +178,6 @@ export const ExtendedJourneyRoutesSchema = z.object({
 	returnJourneys: z.array(ExtendedJourneySchema).optional(),
 });
 
-export type ConvertToSegments<T extends JourneyRouteSchedule> = Omit<T, 'trains'> & {
-	segments: (TrainDetails | TransferDetails)[];
-};
-
 export type ValidatedJourneyOptions = z.infer<typeof ValidatedJourneyOptionsSchema>;
 export const ValidatedJourneyOptionsSchema = z.union([
 	JourneyOptionsOneWaySchema.omit({ departureTime: true }).extend({
@@ -192,3 +188,13 @@ export const ValidatedJourneyOptionsSchema = z.union([
 		returnDepartureTime: z.date(),
 	}),
 ]);
+
+export type ConvertToSegments<T extends JourneyRouteSchedule> = Omit<T, 'trains'> & {
+	segments: (TrainDetails | TransferDetails)[];
+};
+
+export type ExtendedJourneyRoutesWithSegments<T extends ExtendedJourneyRoutes> = {
+	[K in keyof T]: T[K] extends Array<infer Route>
+	? Array<ConvertToSegments<Route & JourneyRouteSchedule>>
+	: never;
+};

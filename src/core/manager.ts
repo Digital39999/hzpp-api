@@ -1,4 +1,4 @@
-import { JourneyOptions, JourneyRoutes, InternalJourneyData, JourneyRoutesInternalSchema, JourneyTimetable, RollingStockInfo, RollingStockInfoSchema, Station, StationSchema, JourneyRouteSchedule, TrainDetails, JourneyRouteScheduleSchema, TrainInfo, TrainInfoSchema, ExtendedJourneyRouteSchedule, ExtendedJourneyRouteScheduleSchema, ConvertToSegments, TransferDetails, JourneyRouteScheduleSegmentsSchema, ExtendedJourneyRoutes, ExtendedJourneyRoutesSchema, ExtendedJourney } from './parsers';
+import { JourneyOptions, JourneyRoutes, InternalJourneyData, JourneyRoutesInternalSchema, JourneyTimetable, RollingStockInfo, RollingStockInfoSchema, Station, StationSchema, JourneyRouteSchedule, TrainDetails, JourneyRouteScheduleSchema, TrainInfo, TrainInfoSchema, ExtendedJourneyRouteSchedule, ExtendedJourneyRouteScheduleSchema, ConvertToSegments, TransferDetails, JourneyRouteScheduleSegmentsSchema, ExtendedJourneyRoutes, ExtendedJourneyRoutesSchema, ExtendedJourney, ExtendedJourneyRoutesWithSegments } from './parsers';
 import { dateToDateTime, featuresToEnum, formatMinutesToTime, hashObject, matchStationName, parseZodError, timeStringToMinutes, validateJourney } from './utils';
 import { CompositionTypeEnum, TrainStateEnum, TrainStatusEnum, TrainTypeEnum, TripTypeEnum } from './constants';
 import config, { ManagerConfig } from './config';
@@ -624,6 +624,19 @@ export class HzppManager {
 		const parsed = JourneyRouteScheduleSegmentsSchema.safeParse(segmented);
 		if (!parsed.success) throw new Error(`Failed to parse segmented train composition data: ${parseZodError(parsed.error).join(', ')}.`);
 		return parsed.data as ConvertToSegments<T>;
+	}
+
+	public convertMultipleJourneySchedulesToSegments<T extends ExtendedJourneyRoutes>(data: T): ExtendedJourneyRoutesWithSegments<T> {
+		return {
+			outwardJourneys: data.outwardJourneys.map((journey) => {
+				const schedule = this.convertJourneyScheduleToSegments(journey.schedule);
+				return { ...journey, ...schedule };
+			}),
+			returnJourneys: data.returnJourneys?.map((journey) => {
+				const schedule = this.convertJourneyScheduleToSegments(journey.schedule);
+				return { ...journey, ...schedule };
+			}),
+		} as ExtendedJourneyRoutesWithSegments<T>;
 	}
 }
 
