@@ -22,7 +22,7 @@ export const DateTimeSchema = z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time fo
 export type PassengerCount = z.infer<typeof PassengerCountSchema>;
 export const PassengerCountSchema = z.object({
 	count: z.nativeEnum(PassengerCountEnum),
-	benefitId: z.nativeEnum(DiscountEnum).optional(),
+	benefitId: z.nativeEnum(DiscountEnum),
 });
 
 export type OneWayJourneyInput = z.infer<typeof JourneyOptionsOneWaySchema>;
